@@ -64,7 +64,29 @@ docker compose up -d
 
 
 
+## Ingestion Layer
+The ingestion script (ingestion/ingest.py) fetches the latest currency exchange rates from the public Frankfurter API.
+
+### Key Features
+
+- Retries with Exponential Backoff: Uses tenacity to handle temporary network failures gracefully.
+
+- In-Memory Processing: Converts JSON data to Pandas DataFrame and writes it as Parquet directly to MinIO using an in-memory buffer (io.BytesIO), avoiding local disk I/O.
+
+- Auto-Bucket Creation: Automatically checks if the bronze bucket exists and creates it if necessary.
+
+- Partitioning: Saves data in a Hive-style partitioned folder structure (date=YYYY-MM-DD) to optimize downstream Spark reads.
+
+### How to Run Locally
+Ensure your virtual environment is activated and dependencies are installed, then run:
+
+```bash
+
+python ingestion/ingest.py
+
+```
+
 ## Status
 
-🚧 Work in progress. Infrastructure and Ingestion.
+Work in progress. Infrastructure and Ingestion are complete. Next step: Spark transformation.
 
