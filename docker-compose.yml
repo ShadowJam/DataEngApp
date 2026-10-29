@@ -1,21 +1,36 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.9.3
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
   environment:
     - AIRFLOW__CORE__EXECUTOR=LocalExecutor
     - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
     - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
     - AIRFLOW__CORE__LOAD_EXAMPLES=False
     - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+    - MINIO_ENDPOINT=http://minio:9000
+    - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+    - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+    - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-clickhouse}
   volumes:
     - ./dags:/opt/airflow/dags
+    - ./ingestion:/opt/airflow/ingestion
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - /var/run/docker.sock:/var/run/docker.sock
   depends_on:
     postgres:
       condition: service_healthy
   user: "${AIRFLOW_UID:-50000}:0"
 
 services:
+  airflow-init:
+    <<: *airflow-common
+    command: >
+      bash -c "airflow db migrate &&
+               (airflow users create --username airflow --firstname Air --lastname Flow --role Admin --email admin@example.com --password airflow || true)"
+    # The '|| true' prevents the script from failing if the user already exists.
   postgres:
     image: postgres:13
     environment:
@@ -34,6 +49,11 @@ services:
     command: webserver
     ports:
       - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 30s
@@ -43,6 +63,11 @@ services:
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
   minio:
     image: pgsty/silo:latest
