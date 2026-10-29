@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Airflow
+logs/
+plugins/
+airflow.cfg
+airflow.db
+webserver_config.py
+
+# dags
+dags/**/__pycache__/
+dags/**/*.pyc
+
+# Spark
+spark-warehouse/
+metastore_db/
+derby.log
+.sparkStash/
+
+# data
+data/
+*.parquet
+*.csv
+*.log
+
+# secrets and local
+.env
+.env.local
+*.pem
+secrets/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Docker
+*.pid
