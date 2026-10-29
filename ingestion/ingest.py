@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # MinIO configuration (endpoint is localhost because we run the script from the host machine)
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
 BUCKET_NAME = "bronze"
