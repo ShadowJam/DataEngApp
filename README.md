@@ -1,87 +1,90 @@
 # Airflow + Spark + ClickHouse Pet Project
 
-An educational ETL pipeline: Ingestion from a public API -> Bronze (MinIO) -> Spark -> ClickHouse.
+An end-to-end, containerized ETL pipeline orchestrated by Apache Airflow. This project demonstrates data ingestion, distributed processing, and analytical storage using modern Data Engineering tools.
 
 ## Stack
-- Apache Airflow 2.9.3
-- Apache Spark 3.5.0
-- ClickHouse 24.3
-- MinIO (S3-compatible object storage)
-- PostgreSQL (Airflow metadata)
+- **Orchestration**: Apache Airflow 2.9.3
+- **Processing**: Apache Spark 3.5.0
+- **Storage (Data Lake)**: MinIO (S3-compatible)
+- **Storage (Analytics)**: ClickHouse 24.3
+- **Metadata DB**: PostgreSQL 13
+- **Infrastructure**: Docker & Docker Compose
 
 ## Architecture & Data Flow
-1. **Ingestion**: A Python script fetches currency exchange rates from the Frankfurter API and saves the raw data as Parquet files into the `bronze` bucket in MinIO.
-2. **Transformation (Spark)**: A PySpark job reads the Parquet files from MinIO, aggregates the rates, and writes the result into a ClickHouse table.
-3. **Serving (ClickHouse)**: ClickHouse stores the final aggregated data in a `MergeTree` table, ready for analytics.
+1. **Ingestion**: A Python script (`ingestion/ingest.py`) fetches currency exchange rates from the [Frankfurter API](https://www.frankfurter.app/), converts them to Parquet, and saves them to the `bronze` bucket in MinIO.
+2. **Transformation**: A PySpark job (`spark_jobs/transform_rates.py`) reads the raw Parquet data from MinIO, calculates the average rate per currency, and writes the result to ClickHouse.
+3. **Orchestration**: An Airflow DAG (`dags/currency_pipeline.py`) schedules and executes the Ingestion and Transformation steps hourly, handling retries and dependencies.
+
+## Project Structure
+- `dags/` - Airflow DAG definitions
+- `ingestion/` - Python scripts for API extraction and loading to MinIO
+- `spark_jobs/` - PySpark transformation scripts
+- `clickhouse/` - ClickHouse initialization SQL scripts
+- `Dockerfile.airflow` - Custom Airflow image with required dependencies and Docker CLI
 
 ## Getting Started
 
-1. Copy `.env.example` to `.env` and fill in the values:
-   ```bash
-   cp .env.example .env
-   ```
+### 1. Prerequisites
+- Docker Desktop (with WSL 2 backend on Windows)
+- Git (optional)
 
-2. Bring up the infrastructure:
-   ```bash
-   docker compose up -d
-   ```
-
-3. Check the services:
-   - Airflow UI: http://localhost:8080 (airflow / airflow)
-   - MinIO Console: http://localhost:9001 (minioadmin / minioadmin)
-   - Spark Master UI: http://localhost:8081
-
-## Project Structure
-- `dags/` - Airflow DAGs
-- `spark_jobs/` - PySpark transformation scripts
-- `ingestion/` - Python scripts for API extraction and loading to Bronze
-- `clickhouse/` - ClickHouse initialization SQL scripts
-
-## Ingestion Layer
-
-The ingestion script (`ingestion/ingest.py`) fetches the latest currency exchange rates from the public [Frankfurter API](https://www.frankfurter.app/).
-
-### Key Features
-- **Retries with Exponential Backoff**: Uses `tenacity` to handle temporary network failures gracefully.
-- **In-Memory Processing**: Converts JSON data to Pandas DataFrame and writes it as Parquet directly to MinIO using an in-memory buffer (`io.BytesIO`), avoiding local disk I/O.
-- **Auto-Bucket Creation**: Automatically checks if the `bronze` bucket exists and creates it if necessary.
-- **Partitioning**: Saves data in a Hive-style partitioned folder structure (`date=YYYY-MM-DD`) to optimize downstream Spark reads.
-
-### How to Run Locally
-Ensure your virtual environment is activated and dependencies are installed, then run:
+### 2. Environment Setup
+Copy the example environment file and fill in the values:
 ```bash
-python ingestion/ingest.py
+cp .env.example .env
 ```
 
-## Spark Transformation Layer
+Ensure your `.env` file contains the following key variables:
+```env
+# Airflow
+AIRFLOW_FERNET_KEY=your_generated_fernet_key
+AIRFLOW_UID=50000
 
-The PySpark job (`spark_jobs/transform_rates.py`) reads the raw Parquet data from MinIO, calculates the average exchange rate per currency for each date, and writes the result to ClickHouse.
+# MinIO
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+MINIO_ENDPOINT=http://minio:9000
 
-### How to Run
-To execute the Spark job inside the Docker cluster, run the following command from the project root:
-
-```bash
-docker exec -it dataengapp-spark-master-1 /opt/spark/bin/spark-submit \
-  --master spark://spark-master:7077 \
-  --conf spark.jars.ivy=/tmp/.ivy2 \
-  --packages org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,com.clickhouse:clickhouse-jdbc:0.4.6 \
-  /opt/spark/jobs/transform_rates.py
+# ClickHouse
+CLICKHOUSE_USER=default
+CLICKHOUSE_PASSWORD=clickhouse
 ```
 
-## ClickHouse Layer
-
-ClickHouse is initialized automatically using the `clickhouse/init.sql` script (mounted via Docker volume). This script creates the `rates_db` database and the `fact_rates` table.
-
-### Connecting
-To connect to ClickHouse via CLI:
+### 3. Start the Infrastructure
+Bring up the entire stack (Airflow, Spark, MinIO, ClickHouse, Postgres). The `airflow-init` service will automatically initialize the metadata database and create the default admin user (`airflow`/`airflow`).
 ```bash
-docker exec -it dataengapp-clickhouse-1 clickhouse-client --password clickhouse
+docker compose up -d
 ```
 
-### Verifying Data
+### 4. Verify Services
+- **Airflow UI**: http://localhost:8080 (user: `airflow`, password: `airflow`)
+- **MinIO Console**: http://localhost:9001 (user: `minioadmin`, password: `minioadmin`)
+- **Spark Master UI**: http://localhost:8081
+
+## Running the Pipeline
+
+1. Open the Airflow UI.
+2. Locate the `currency_pipeline` DAG.
+3. Toggle it to **On** and click the **Play** button (Trigger DAG) to run it manually.
+4. You can monitor the progress and check logs directly in the Airflow UI.
+
+The DAG is scheduled to run `@hourly`, but `catchup` is set to `False` to prevent backfilling past dates.
+
+## Verifying the Data
+
+To verify the data landed in ClickHouse, you can use the CLI. Run the following command from the project root to connect (it automatically reads the password from the container's environment variables):
+
+```bash
+docker exec -it dataengapp-clickhouse-1 sh -c 'clickhouse-client --password $CLICKHOUSE_PASSWORD'
+```
+
+Once inside the ClickHouse client, run this SQL query:
 ```sql
 SELECT * FROM rates_db.fact_rates LIMIT 10;
 ```
 
-## Status
-Work in progress. Infrastructure, Ingestion, and Spark transformation are complete. Next step: Airflow orchestration.
+## Key Features & Best Practices
+- **Configuration Management**: All credentials and environment-specific settings are managed via `.env` files and passed safely to containers.
+- **Error Handling**: Ingestion uses `tenacity` for exponential backoff. Airflow DAG uses `retries` and `retry_delay` for fault tolerance.
+- **Idempotency**: Airflow uses `catchup=False`, and ClickHouse uses the `MergeTree` engine.
+- **Docker Integration**: Airflow uses the mounted `docker.sock` to trigger Spark jobs seamlessly within the same Docker network.
