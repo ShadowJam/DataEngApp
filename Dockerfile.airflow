@@ -1,4 +1,4 @@
-FROM apache/airflow:2.9.3
+FROM apache/airflow:2.11.0
 
 USER root
 # Install Docker CLI to allow Airflow to execute commands on the host's Docker daemon

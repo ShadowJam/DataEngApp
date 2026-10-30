@@ -8,13 +8,18 @@ x-airflow-common: &airflow-common
     - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
     - AIRFLOW__CORE__LOAD_EXAMPLES=False
     - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
-    - MINIO_ENDPOINT=http://minio:9000
+    # MinIO vars
     - MINIO_ROOT_USER=${MINIO_ROOT_USER}
     - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    - MINIO_ENDPOINT=http://minio:9000
+    # ClickHouse vars
     - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
     - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-clickhouse}
+    # Airflow Connection to ClickHouse (allows SQLExecuteQueryOperator to find the DB)
+    - AIRFLOW_CONN_CLICKHOUSE_DEFAULT=clickhouse://default:clickhouse@clickhouse:8123/rates_db
   volumes:
     - ./dags:/opt/airflow/dags
+    - ./sql:/opt/airflow/dags/sql
     - ./ingestion:/opt/airflow/ingestion
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
