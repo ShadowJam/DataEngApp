@@ -135,7 +135,23 @@ services:
     volumes:
       - ./spark_jobs:/opt/spark/jobs
 
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.11
+    container_name: dataengapp-redpanda-1
+    command: >
+      redpanda start
+      --smp 1
+      --memory 512M
+      --overprovisioned
+      --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+
 volumes:
   postgres-db-volume:
   minio-data:
   clickhouse-data:
+  redpanda-data:
